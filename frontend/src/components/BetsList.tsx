@@ -107,37 +107,127 @@ export function BetsList() {
     try {
       // Check if bet exists and is joinable before proceeding
       const bet = await betManager.getBetDetails(betId);
-      if (!bet || bet.status !== 0) {
-        toast.error('This bet is no longer available to join');
+      console.log('Bet details before joining:', {
+        id: betId,
+        status: bet.status,
+        statusText: getBetStatusText(bet.status),
+        creator: bet.creator,
+        joiner: bet.joiner,
+        amount: bet.amount.toString(),
+        currentAccount: account,
+        isZeroAddress: bet.joiner === ethers.ZeroAddress,
+        contractAddress: betManager.address
+      });
+
+      if (!bet) {
+        toast.error('This bet no longer exists');
         return;
       }
 
-      const tx = await betManager.joinBet(betId, {
-        value: amount
+      // Check if bet is open (status 0)
+      const betStatus = Number(bet.status);
+      if (betStatus !== 0) {
+        const statusText = getBetStatusText(betStatus);
+        console.log('Bet status check failed:', { status: betStatus, statusText });
+        toast.error(`This bet is ${statusText.toLowerCase()} and cannot be joined`);
+        return;
+      }
+
+      // Check if bet has already been joined
+      if (bet.joiner !== ethers.ZeroAddress) {
+        console.log('Bet already joined:', { joiner: bet.joiner });
+        toast.error('This bet has already been joined by someone else');
+        return;
+      }
+
+      // Check if user is trying to join their own bet
+      if (bet.creator.toLowerCase() === account?.toLowerCase()) {
+        console.log('Trying to join own bet:', { creator: bet.creator, account });
+        toast.error('You cannot join your own bet');
+        return;
+      }
+
+      // Check if the amount matches exactly
+      if (amount !== bet.amount) {
+        console.log('Amount mismatch:', { 
+          provided: amount.toString(), 
+          required: bet.amount.toString() 
+        });
+        toast.error(`Please match the exact bet amount of ${ethers.formatEther(bet.amount)} ETH`);
+        return;
+      }
+
+      console.log('Attempting to join bet with:', {
+        betId,
+        amount: amount.toString(),
+        value: amount.toString(),
+        contractAddress: betManager.address
       });
-      
-      toast.info('Transaction submitted. Waiting for confirmation...');
-      
-      // Wait for transaction confirmation
-      const receipt = await tx.wait();
-      
-      if (receipt.status === 1) {
-        toast.success('Successfully joined the bet!');
-        // Refresh bets list
-        fetchBets();
-      } else {
-        toast.error('Transaction failed');
+
+      try {
+        const tx = await betManager.joinBet(betId, {
+          value: amount
+        });
+        
+        console.log('Transaction submitted:', {
+          hash: tx.hash,
+          from: account,
+          to: betManager.address,
+          value: amount.toString()
+        });
+        
+        toast.info('Transaction submitted. Waiting for confirmation...');
+        
+        // Wait for transaction confirmation
+        const receipt = await tx.wait();
+        console.log('Transaction receipt:', {
+          status: receipt.status,
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed.toString()
+        });
+        
+        if (receipt.status === 1) {
+          toast.success('Successfully joined the bet!');
+          // Refresh bets list
+          fetchBets();
+        } else {
+          toast.error('Transaction failed');
+        }
+      } catch (txError: any) {
+        console.error('Transaction error:', {
+          message: txError.message,
+          code: txError.code,
+          data: txError.data
+        });
+        throw txError;
       }
     } catch (error: any) {
-      console.error('Error joining bet:', error);
+      console.error('Error joining bet:', {
+        message: error.message,
+        code: error.code,
+        data: error.data,
+        stack: error.stack
+      });
+      
       let errorMessage = 'Failed to join bet';
       
       // Try to extract a more useful error message
       if (error.message) {
+        console.log('Error message:', error.message);
         if (error.message.includes('insufficient funds')) {
           errorMessage = 'Insufficient funds to join this bet';
         } else if (error.message.includes('user rejected')) {
           errorMessage = 'Transaction was rejected';
+        } else if (error.message.includes('Bet is not open')) {
+          errorMessage = 'This bet is no longer available to join';
+        } else if (error.message.includes('Cannot join your own bet')) {
+          errorMessage = 'You cannot join your own bet';
+        } else if (error.message.includes('Must match the exact bet amount')) {
+          errorMessage = 'Please match the exact bet amount';
+        } else if (error.message.includes('execution reverted')) {
+          // Extract the revert reason if available
+          const revertReason = error.message.split('execution reverted:')[1]?.trim();
+          errorMessage = revertReason || 'Transaction reverted';
         }
       }
       

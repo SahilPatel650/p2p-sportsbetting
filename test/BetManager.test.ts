@@ -12,9 +12,18 @@ interface Bet {
   description: string;
   deadline: bigint;
   creatorWon: boolean;
-  status: bigint;
+  status: number;
   isSettled: boolean;
 }
+
+// Enum values for BetStatus
+const BetStatus = {
+  Open: 0,
+  Active: 1,
+  Completed: 2,
+  Cancelled: 3,
+  Refunded: 4
+};
 
 describe("Sports Betting Contracts", function () {
   // We define a fixture to reuse the same setup in every test
@@ -68,12 +77,12 @@ describe("Sports Betting Contracts", function () {
       // Get the bet
       const bet = await betManager.read.getBetDetails([0n]) as unknown as Bet;
       
-      // Check bet details
-      expect(bet.creator).to.equal(user1.account.address);
+      // Check bet details - use toLowerCase for address comparison
+      expect(bet.creator.toLowerCase()).to.equal(user1.account.address.toLowerCase());
       expect(bet.amount).to.equal(parseEther("0.1"));
       expect(bet.description).to.equal("Lakers vs Warriors");
       expect(bet.deadline).to.equal(deadline);
-      expect(bet.status).to.equal(0n); // Open status
+      expect(Number(bet.status)).to.equal(BetStatus.Open);
     });
     
     it("Should allow users to join bets", async function () {
@@ -97,9 +106,9 @@ describe("Sports Betting Contracts", function () {
       // Get the bet
       const bet = await betManager.read.getBetDetails([0n]) as unknown as Bet;
       
-      // Check bet details
-      expect(bet.joiner).to.equal(user2.account.address);
-      expect(bet.status).to.equal(1n); // Active status
+      // Check bet details - use toLowerCase for address comparison
+      expect(bet.joiner.toLowerCase()).to.equal(user2.account.address.toLowerCase());
+      expect(Number(bet.status)).to.equal(BetStatus.Active);
     });
     
     it("Should allow settlement of bets by oracle", async function () {
@@ -131,7 +140,7 @@ describe("Sports Betting Contracts", function () {
       
       // Check bet details
       expect(bet.creatorWon).to.be.true;
-      expect(bet.status).to.equal(2n); // Completed status
+      expect(Number(bet.status)).to.equal(BetStatus.Completed);
       expect(bet.isSettled).to.be.true;
     });
     
@@ -154,7 +163,7 @@ describe("Sports Betting Contracts", function () {
       );
       
       // Advance time past the deadline
-      await time.increaseTo(deadline + 1n);
+      await time.increaseTo(Number(deadline) + 1);
       
       // Timeout the bet
       await betManager.write.timeoutBet([0n], { account: user1.account });
@@ -163,7 +172,7 @@ describe("Sports Betting Contracts", function () {
       const bet = await betManager.read.getBetDetails([0n]) as unknown as Bet;
       
       // Check bet details
-      expect(bet.status).to.equal(4n); // Refunded status
+      expect(Number(bet.status)).to.equal(BetStatus.Refunded);
     });
     
     it("Should allow bet cancellation before it's joined", async function () {
@@ -185,7 +194,7 @@ describe("Sports Betting Contracts", function () {
       const bet = await betManager.read.getBetDetails([0n]) as unknown as Bet;
       
       // Check bet details
-      expect(bet.status).to.equal(3n); // Cancelled status
+      expect(Number(bet.status)).to.equal(BetStatus.Cancelled);
     });
   });
 }); 

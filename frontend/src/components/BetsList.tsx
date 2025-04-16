@@ -37,7 +37,13 @@ const getBetStatusText = (status: number | undefined): string => {
 const formatDate = (timestamp: bigint | undefined): string => {
   if (!timestamp) return 'Unknown Date';
   const date = new Date(Number(timestamp) * 1000);
-  return date.toLocaleString();
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 };
 
 // Format address for display
@@ -63,19 +69,31 @@ export function BetsList() {
       // Transform and add ID for each bet
       const formattedBets = allBets
         .filter((bet: any) => bet !== null && typeof bet === 'object') // Filter out null or invalid bets
-        .map((bet: Bet, index: number) => ({
-          ...bet,
-          id: index,
-          // Ensure properties exist or provide defaults
-          creator: bet.creator || '',
-          joiner: bet.joiner || '',
-          amount: bet.amount || BigInt(0),
-          description: bet.description || 'No description',
-          deadline: bet.deadline || BigInt(0),
-          status: typeof bet.status === 'number' ? bet.status : 0,
-          creatorWon: Boolean(bet.creatorWon),
-          isSettled: Boolean(bet.isSettled)
-        }));
+        .map((bet: Bet, index: number) => {
+          // Convert status to number explicitly
+          const status = typeof bet.status === 'bigint' ? Number(bet.status) : 
+                        typeof bet.status === 'number' ? bet.status : 0;
+          
+          return {
+            ...bet,
+            id: index,
+            // Ensure properties exist or provide defaults
+            creator: bet.creator || '',
+            joiner: bet.joiner || '',
+            amount: bet.amount || BigInt(0),
+            description: bet.description || 'No description',
+            deadline: bet.deadline || BigInt(0),
+            status: status,
+            creatorWon: Boolean(bet.creatorWon),
+            isSettled: Boolean(bet.isSettled)
+          };
+        });
+      
+      console.log('Updated bets:', formattedBets.map((bet: Bet) => ({
+        id: bet.id,
+        status: bet.status,
+        statusText: getBetStatusText(bet.status)
+      })));
       
       setBets(formattedBets);
     } catch (error) {
@@ -248,35 +266,45 @@ export function BetsList() {
       const betSettledFilter = betManager.filters.BetSettled();
       const betCancelledFilter = betManager.filters.BetCancelled();
       
-      betManager.on(betCreatedFilter, () => {
+      const handleBetCreated = () => {
+        console.log('Bet created event received');
         fetchBets();
-      });
+      };
       
-      betManager.on(betJoinedFilter, () => {
+      const handleBetJoined = () => {
+        console.log('Bet joined event received');
         fetchBets();
-      });
+      };
       
-      betManager.on(betSettledFilter, () => {
+      const handleBetSettled = () => {
+        console.log('Bet settled event received');
         fetchBets();
-      });
+      };
       
-      betManager.on(betCancelledFilter, () => {
+      const handleBetCancelled = () => {
+        console.log('Bet cancelled event received');
         fetchBets();
-      });
+      };
+      
+      betManager.on(betCreatedFilter, handleBetCreated);
+      betManager.on(betJoinedFilter, handleBetJoined);
+      betManager.on(betSettledFilter, handleBetSettled);
+      betManager.on(betCancelledFilter, handleBetCancelled);
       
       // Clean up event listeners
       return () => {
-        betManager.off(betCreatedFilter);
-        betManager.off(betJoinedFilter);
-        betManager.off(betSettledFilter);
-        betManager.off(betCancelledFilter);
+        betManager.off(betCreatedFilter, handleBetCreated);
+        betManager.off(betJoinedFilter, handleBetJoined);
+        betManager.off(betSettledFilter, handleBetSettled);
+        betManager.off(betCancelledFilter, handleBetCancelled);
       };
     }
   }, [betManager, isConnected]);
 
   // Filter for bets that are still open and not created by current user
   const openBets = bets.filter(bet => 
-    bet.status === 0 && // Open status
+    Number(bet.status) === 0 && // Open status
+    bet.joiner === ethers.ZeroAddress && // Not joined yet
     bet.creator && account && bet.creator.toLowerCase() !== account.toLowerCase() // Not created by current user
   );
 
@@ -312,8 +340,26 @@ export function BetsList() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Status:</span>
-                      <span className="font-medium text-green-600">{getBetStatusText(bet.status)}</span>
+                      <span className={`font-medium ${
+                        bet.status === 0 ? "text-blue-600" : 
+                        bet.status === 1 ? "text-yellow-600" : 
+                        bet.status === 2 ? "text-green-600" : 
+                        bet.status === 3 ? "text-red-600" :
+                        "text-gray-600"
+                      }`}>
+                        {getBetStatusText(bet.status)}
+                      </span>
                     </div>
+                    {bet.status === 1 && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-500">Opponent:</span>
+                        <span className="font-medium">
+                          {bet.creator && bet.creator.toLowerCase() === account?.toLowerCase() 
+                            ? formatAddress(bet.joiner)
+                            : formatAddress(bet.creator)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
                 <CardFooter className="bg-gray-50">
@@ -369,6 +415,7 @@ export function BetsList() {
                         bet.status === 0 ? "text-blue-600" : 
                         bet.status === 1 ? "text-yellow-600" : 
                         bet.status === 2 ? "text-green-600" : 
+                        bet.status === 3 ? "text-red-600" :
                         "text-gray-600"
                       }`}>
                         {getBetStatusText(bet.status)}
@@ -438,4 +485,4 @@ export function BetsList() {
       </div>
     </div>
   );
-} 
+}

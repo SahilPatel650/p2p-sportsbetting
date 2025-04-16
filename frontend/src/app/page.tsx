@@ -5,6 +5,8 @@ import { Navbar } from '@/components/Navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CreateBetForm } from '@/components/CreateBetForm';
 import { BetsList } from '@/components/BetsList';
+import { SportsEventsList } from '@/components/SportsEventsList';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWeb3 } from '@/context/Web3Context';
 
 export default function Home() {
@@ -52,14 +54,20 @@ export default function Home() {
 
         {isConnected ? (
           isCorrectNetwork ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1">
-                <CreateBetForm />
-              </div>
-              <div className="lg:col-span-2">
+            <Tabs defaultValue="sports">
+              <TabsList className="mb-4">
+                <TabsTrigger value="sports">Sports Events</TabsTrigger>
+                <TabsTrigger value="bets">All Bets</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="sports">
+                <SportsEventsList />
+              </TabsContent>
+              
+              <TabsContent value="bets">
                 <BetsList />
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           ) : (
             <Card className="bg-yellow-50">
               <CardHeader>

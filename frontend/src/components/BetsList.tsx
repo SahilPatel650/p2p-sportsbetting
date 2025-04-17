@@ -17,6 +17,11 @@ interface Bet {
   creatorWon: boolean;
   status: number;
   isSettled: boolean;
+  // New sports betting fields
+  sportEvent: string;
+  selectedTeam: string;
+  threshold: bigint;
+  isMoreLine: boolean;
   id?: number; // Added for UI purposes
 }
 
@@ -85,7 +90,12 @@ export function BetsList() {
             deadline: bet.deadline || BigInt(0),
             status: status,
             creatorWon: Boolean(bet.creatorWon),
-            isSettled: Boolean(bet.isSettled)
+            isSettled: Boolean(bet.isSettled),
+            // New sports betting fields with defaults
+            sportEvent: bet.sportEvent || '',
+            selectedTeam: bet.selectedTeam || '',
+            threshold: bet.threshold || BigInt(0),
+            isMoreLine: Boolean(bet.isMoreLine)
           };
         });
       
@@ -255,234 +265,322 @@ export function BetsList() {
     }
   };
 
-  // Initialize and set up event listeners
-  useEffect(() => {
-    if (isConnected && betManager) {
-      fetchBets();
-      
-      // Listen for new bet events
-      const betCreatedFilter = betManager.filters.BetCreated();
-      const betJoinedFilter = betManager.filters.BetJoined();
-      const betSettledFilter = betManager.filters.BetSettled();
-      const betCancelledFilter = betManager.filters.BetCancelled();
-      
-      const handleBetCreated = () => {
-        console.log('Bet created event received');
-        fetchBets();
-      };
-      
-      const handleBetJoined = () => {
-        console.log('Bet joined event received');
-        fetchBets();
-      };
-      
-      const handleBetSettled = () => {
-        console.log('Bet settled event received');
-        fetchBets();
-      };
-      
-      const handleBetCancelled = () => {
-        console.log('Bet cancelled event received');
-        fetchBets();
-      };
-      
-      betManager.on(betCreatedFilter, handleBetCreated);
-      betManager.on(betJoinedFilter, handleBetJoined);
-      betManager.on(betSettledFilter, handleBetSettled);
-      betManager.on(betCancelledFilter, handleBetCancelled);
-      
-      // Clean up event listeners
-      return () => {
-        betManager.off(betCreatedFilter, handleBetCreated);
-        betManager.off(betJoinedFilter, handleBetJoined);
-        betManager.off(betSettledFilter, handleBetSettled);
-        betManager.off(betCancelledFilter, handleBetCancelled);
-      };
+  // Handle bet cancellation
+  const handleCancelBet = async (betId: number) => {
+    if (!betManager || !isConnected || !isCorrectNetwork) {
+      toast.error('Please connect your wallet to Sepolia network');
+      return;
     }
-  }, [betManager, isConnected]);
 
-  // Filter for bets that are still open and not created by current user
-  const openBets = bets.filter(bet => 
-    Number(bet.status) === 0 && // Open status
-    bet.joiner === ethers.ZeroAddress && // Not joined yet
-    bet.creator && account && bet.creator.toLowerCase() !== account.toLowerCase() // Not created by current user
-  );
+    try {
+      toast.info('Cancelling bet...');
+      const tx = await betManager.cancelBet(betId);
+      await tx.wait();
+      toast.success('Bet cancelled successfully!');
+      fetchBets();
+    } catch (error: any) {
+      console.error('Error cancelling bet:', error);
+      toast.error(error.message || 'Failed to cancel bet');
+    }
+  };
 
-  // Get user's bets (either as creator or joiner)
-  const userBets = account ? bets.filter(bet => 
-    (bet.creator && bet.creator.toLowerCase() === account.toLowerCase()) || 
-    (bet.joiner && bet.joiner.toLowerCase() === account.toLowerCase())
-  ) : [];
+  // Handle bet refund claim
+  const handleRefundBet = async (betId: number) => {
+    if (!betManager || !isConnected || !isCorrectNetwork) {
+      toast.error('Please connect your wallet to Sepolia network');
+      return;
+    }
+
+    try {
+      toast.info('Claiming refund...');
+      const tx = await betManager.timeoutBet(betId);
+      await tx.wait();
+      toast.success('Refund claimed successfully!');
+      fetchBets();
+    } catch (error: any) {
+      console.error('Error claiming refund:', error);
+      toast.error(error.message || 'Failed to claim refund');
+    }
+  };
+
+  // Subscribe to contract events
+  useEffect(() => {
+    if (!betManager) return;
+    
+    // Load bets initially
+    fetchBets();
+    
+    // Setup event listeners
+    const handleBetCreated = () => {
+      console.log('Bet created event detected');
+      fetchBets();
+    };
+    
+    const handleBetJoined = () => {
+      console.log('Bet joined event detected');
+      fetchBets();
+    };
+    
+    const handleBetSettled = () => {
+      console.log('Bet settled event detected');
+      fetchBets();
+    };
+    
+    const handleBetCancelled = () => {
+      console.log('Bet cancelled event detected');
+      fetchBets();
+    };
+    
+    const handleBetRefunded = () => {
+      console.log('Bet refunded event detected');
+      fetchBets();
+    };
+    
+    // Subscribe to events
+    betManager.on('BetCreated', handleBetCreated);
+    betManager.on('BetJoined', handleBetJoined);
+    betManager.on('BetSettled', handleBetSettled);
+    betManager.on('BetCancelled', handleBetCancelled);
+    betManager.on('BetRefunded', handleBetRefunded);
+    
+    // Cleanup listeners
+    return () => {
+      betManager.off('BetCreated', handleBetCreated);
+      betManager.off('BetJoined', handleBetJoined);
+      betManager.off('BetSettled', handleBetSettled);
+      betManager.off('BetCancelled', handleBetCancelled);
+      betManager.off('BetRefunded', handleBetRefunded);
+    };
+  }, [betManager]);
+  
+  // Group bets by status for better organization
+  const openBets = bets.filter(bet => bet.status === 0);
+  const activeBets = bets.filter(bet => bet.status === 1);
+  const completedBets = bets.filter(bet => bet.status === 2);
+  const cancelledOrRefundedBets = bets.filter(bet => bet.status === 3 || bet.status === 4);
+  
+  const now = Math.floor(Date.now() / 1000);
+  
+  // Get if a bet is past deadline
+  const isPastDeadline = (bet: Bet): boolean => {
+    return Number(bet.deadline) < now;
+  };
+
+  // Get if the account is involved in a bet (as creator or joiner)
+  const isInvolvedInBet = (bet: Bet): boolean => {
+    if (!account) return false;
+    return bet.creator.toLowerCase() === account.toLowerCase() || 
+           bet.joiner.toLowerCase() === account.toLowerCase();
+  };
+  
+  // Get the user's role in a bet
+  const getUserRoleInBet = (bet: Bet): string => {
+    if (!account) return 'Not Involved';
+    if (bet.creator.toLowerCase() === account.toLowerCase()) return 'Creator';
+    if (bet.joiner.toLowerCase() === account.toLowerCase()) return 'Joiner';
+    return 'Not Involved';
+  };
+  
+  // Format the outcome based on isMoreLine value
+  const formatOutcome = (bet: Bet): string => {
+    return `${bet.selectedTeam} will score ${bet.isMoreLine ? 'more' : 'less'} than ${bet.threshold.toString()} points`;
+  };
+  
+  // Render a bet card
+  const renderBetCard = (bet: Bet) => {
+    const statusText = getBetStatusText(bet.status);
+    const deadline = formatDate(bet.deadline);
+    const isPast = isPastDeadline(bet);
+    const userRole = getUserRoleInBet(bet);
+    const isRefundable = isPast && bet.status === 1 && !bet.isSettled;
+    const betAmount = ethers.formatEther(bet.amount);
+    
+    return (
+      <Card key={bet.id} className={`
+        ${statusText === 'Open' ? 'border-blue-300' : ''}
+        ${statusText === 'Active' ? 'border-green-300' : ''}
+        ${statusText === 'Completed' ? 'border-purple-300' : ''}
+        ${statusText === 'Cancelled' || statusText === 'Refunded' ? 'border-gray-300' : ''}
+        ${isRefundable ? 'border-yellow-300' : ''}
+      `}>
+        <CardHeader>
+          <CardTitle className="flex justify-between items-center">
+            <div className="text-lg">
+              {bet.sportEvent || 'Sports Event'}
+            </div>
+            <div className="text-sm font-normal">
+              <span className={`
+                inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                ${statusText === 'Open' ? 'bg-blue-100 text-blue-800' : ''}
+                ${statusText === 'Active' ? 'bg-green-100 text-green-800' : ''}
+                ${statusText === 'Completed' ? 'bg-purple-100 text-purple-800' : ''}
+                ${statusText === 'Cancelled' || statusText === 'Refunded' ? 'bg-gray-100 text-gray-800' : ''}
+                ${isRefundable ? 'bg-yellow-100 text-yellow-800' : ''}
+              `}>
+                {statusText}
+              </span>
+            </div>
+          </CardTitle>
+          <CardDescription>
+            <span className="font-medium">Bet ID:</span> {bet.id}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="text-sm">
+            <div className="font-semibold mb-2">Outcome Prediction:</div>
+            <div className="bg-gray-50 p-3 rounded-md mb-3">
+              {formatOutcome(bet)}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="font-semibold">Amount:</div>
+                <div>{betAmount} ETH</div>
+              </div>
+              <div>
+                <div className="font-semibold">Deadline:</div>
+                <div className={isPast ? 'text-red-500' : ''}>
+                  {deadline}
+                  {isPast && ' (Passed)'}
+                </div>
+              </div>
+              <div>
+                <div className="font-semibold">Creator:</div>
+                <div>
+                  {formatAddress(bet.creator)}
+                  {userRole === 'Creator' && ' (You)'}
+                </div>
+              </div>
+              <div>
+                <div className="font-semibold">Joiner:</div>
+                <div>
+                  {bet.joiner && bet.joiner !== ethers.ZeroAddress
+                    ? formatAddress(bet.joiner) + (userRole === 'Joiner' ? ' (You)' : '')
+                    : 'Not joined yet'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+        
+        <CardFooter className="flex justify-between">
+          {/* Actions based on bet status */}
+          {statusText === 'Open' && (
+            <>
+              {bet.creator.toLowerCase() === account?.toLowerCase() ? (
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleCancelBet(bet.id as number)}
+                  disabled={!isConnected || !isCorrectNetwork}
+                >
+                  Cancel Bet
+                </Button>
+              ) : (
+                <Button 
+                  onClick={() => handleJoinBet(bet.id as number, bet.amount)}
+                  disabled={joiningBet === bet.id || !isConnected || !isCorrectNetwork}
+                >
+                  {joiningBet === bet.id ? 'Joining...' : 'Join Bet'}
+                </Button>
+              )}
+              <div className="text-sm text-gray-500">
+                Stake: {betAmount} ETH
+              </div>
+            </>
+          )}
+          
+          {statusText === 'Active' && (
+            <>
+              {isRefundable && isInvolvedInBet(bet) ? (
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleRefundBet(bet.id as number)}
+                  disabled={!isConnected || !isCorrectNetwork}
+                >
+                  Claim Refund
+                </Button>
+              ) : (
+                <div className="text-sm">
+                  Waiting for settlement
+                </div>
+              )}
+              <div className="text-sm text-gray-500">
+                Total pot: {(Number(betAmount) * 2).toFixed(4)} ETH
+              </div>
+            </>
+          )}
+          
+          {statusText === 'Completed' && (
+            <div className="text-sm w-full text-center">
+              Winner: {bet.creatorWon ? formatAddress(bet.creator) : formatAddress(bet.joiner)}
+              {bet.creatorWon && userRole === 'Creator' && ' (You)'}
+              {!bet.creatorWon && userRole === 'Joiner' && ' (You)'}
+            </div>
+          )}
+          
+          {(statusText === 'Cancelled' || statusText === 'Refunded') && (
+            <div className="text-sm w-full text-center text-gray-500">
+              This bet was {statusText.toLowerCase()}
+            </div>
+          )}
+        </CardFooter>
+      </Card>
+    );
+  };
+
+  if (loading) {
+    return <div className="p-6 text-center">Loading bets...</div>;
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Section for Open Bets */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Open Bets</h2>
-        {loading ? (
-          <p>Loading bets...</p>
-        ) : openBets.length > 0 ? (
-          <div className="grid gap-4">
-            {openBets.map((bet) => (
-              <Card key={bet.id} className="overflow-hidden">
-                <CardHeader className="bg-gray-50">
-                  <CardTitle className="text-lg">{bet.description}</CardTitle>
-                  <CardDescription>Created by: {formatAddress(bet.creator)}</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="grid gap-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Stake:</span>
-                      <span className="font-medium">{ethers.formatEther(bet.amount)} ETH</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Deadline:</span>
-                      <span className="font-medium">{formatDate(bet.deadline)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Status:</span>
-                      <span className={`font-medium ${
-                        bet.status === 0 ? "text-blue-600" : 
-                        bet.status === 1 ? "text-yellow-600" : 
-                        bet.status === 2 ? "text-green-600" : 
-                        bet.status === 3 ? "text-red-600" :
-                        "text-gray-600"
-                      }`}>
-                        {getBetStatusText(bet.status)}
-                      </span>
-                    </div>
-                    {bet.status === 1 && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-500">Opponent:</span>
-                        <span className="font-medium">
-                          {bet.creator && bet.creator.toLowerCase() === account?.toLowerCase() 
-                            ? formatAddress(bet.joiner)
-                            : formatAddress(bet.creator)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter className="bg-gray-50">
-                  <Button
-                    onClick={() => handleJoinBet(bet.id!, bet.amount)}
-                    disabled={joiningBet === bet.id || !isConnected || !isCorrectNetwork}
-                    className="w-full"
-                  >
-                    {joiningBet === bet.id ? 'Joining...' : `Join Bet (${ethers.formatEther(bet.amount)} ETH)`}
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        ) : (
+        <h2 className="text-xl font-bold mb-4">Open Bets ({openBets.length})</h2>
+        {openBets.length === 0 ? (
           <Card>
             <CardContent className="py-4">
-              <p className="text-center text-gray-500">No open bets available.</p>
+              <p className="text-center text-gray-500">
+                No open bets available. Create a new bet to get started!
+              </p>
             </CardContent>
           </Card>
-        )}
-      </div>
-
-      <div>
-        <h2 className="text-xl font-semibold mb-4">My Bets</h2>
-        {loading ? (
-          <p>Loading bets...</p>
-        ) : userBets.length > 0 ? (
-          <div className="grid gap-4">
-            {userBets.map((bet) => (
-              <Card key={bet.id} className="overflow-hidden">
-                <CardHeader className={bet.status === 0 ? "bg-blue-50" : bet.status === 1 ? "bg-yellow-50" : "bg-gray-50"}>
-                  <CardTitle className="text-lg">{bet.description}</CardTitle>
-                  <CardDescription>
-                    {bet.creator && bet.creator.toLowerCase() === account?.toLowerCase() 
-                      ? "You created this bet"
-                      : `You joined this bet (created by ${formatAddress(bet.creator)})`}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="grid gap-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Stake:</span>
-                      <span className="font-medium">{ethers.formatEther(bet.amount)} ETH</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Deadline:</span>
-                      <span className="font-medium">{formatDate(bet.deadline)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Status:</span>
-                      <span className={`font-medium ${
-                        bet.status === 0 ? "text-blue-600" : 
-                        bet.status === 1 ? "text-yellow-600" : 
-                        bet.status === 2 ? "text-green-600" : 
-                        bet.status === 3 ? "text-red-600" :
-                        "text-gray-600"
-                      }`}>
-                        {getBetStatusText(bet.status)}
-                      </span>
-                    </div>
-                    {bet.status === 1 && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-500">Opponent:</span>
-                        <span className="font-medium">
-                          {bet.creator && bet.creator.toLowerCase() === account?.toLowerCase() 
-                            ? formatAddress(bet.joiner)
-                            : formatAddress(bet.creator)}
-                        </span>
-                      </div>
-                    )}
-                    {bet.status === 2 && bet.isSettled && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-500">Result:</span>
-                        <span className="font-medium">
-                          {(bet.creator && bet.creator.toLowerCase() === account?.toLowerCase() && bet.creatorWon) ||
-                           (bet.joiner && bet.joiner.toLowerCase() === account?.toLowerCase() && !bet.creatorWon)
-                            ? "You won!" 
-                            : "You lost"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-                {bet.status === 0 && bet.creator && bet.creator.toLowerCase() === account?.toLowerCase() && (
-                  <CardFooter className="bg-gray-50">
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        if (!betManager) {
-                          toast.error('Betting contract not initialized');
-                          return;
-                        }
-                        try {
-                          setJoiningBet(bet.id!);
-                          const tx = await betManager.cancelBet(bet.id);
-                          await tx.wait();
-                          toast.success('Bet cancelled successfully');
-                          fetchBets();
-                        } catch (error: any) {
-                          toast.error(error.message || 'Failed to cancel bet');
-                        } finally {
-                          setJoiningBet(null);
-                        }
-                      }}
-                      disabled={joiningBet === bet.id}
-                      className="w-full"
-                    >
-                      {joiningBet === bet.id ? 'Cancelling...' : 'Cancel Bet'}
-                    </Button>
-                  </CardFooter>
-                )}
-              </Card>
-            ))}
-          </div>
         ) : (
-          <Card>
-            <CardContent className="py-4">
-              <p className="text-center text-gray-500">You have no active bets.</p>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {openBets.map(renderBetCard)}
+          </div>
         )}
       </div>
+      
+      {/* Section for Active Bets */}
+      {activeBets.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold mb-4">Active Bets ({activeBets.length})</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeBets.map(renderBetCard)}
+          </div>
+        </div>
+      )}
+      
+      {/* Section for Completed Bets */}
+      {completedBets.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold mb-4">Completed Bets ({completedBets.length})</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {completedBets.map(renderBetCard)}
+          </div>
+        </div>
+      )}
+      
+      {/* Section for Cancelled/Refunded Bets */}
+      {cancelledOrRefundedBets.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold mb-4">Cancelled/Refunded Bets ({cancelledOrRefundedBets.length})</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {cancelledOrRefundedBets.map(renderBetCard)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

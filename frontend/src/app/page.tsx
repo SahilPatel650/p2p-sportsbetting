@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CreateBetForm } from '@/components/CreateBetForm';
@@ -12,6 +12,8 @@ import { useWeb3 } from '@/context/Web3Context';
 export default function Home() {
   const { isConnected, isCorrectNetwork } = useWeb3();
   const [showSetupCard, setShowSetupCard] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>("createBet");
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Check if environment variables are set
@@ -23,6 +25,37 @@ export default function Home() {
         oracleRegistryAddress && oracleRegistryAddress.length > 0) {
       setShowSetupCard(false);
     }
+
+    // Make a global function to switch tabs
+    (window as any).switchToCreateBetTab = () => {
+      setActiveTab("createBet");
+    };
+  }, []);
+
+  // Listen for custom event to switch tabs
+  useEffect(() => {
+    const handleSwitchTab = () => {
+      console.log('Custom event received: switch-to-create-bet');
+      setActiveTab("createBet");
+      // Find and click the tab to ensure UI is updated
+      if (tabsRef.current) {
+        const tabElement = tabsRef.current.querySelector('[value="createBet"]');
+        if (tabElement) {
+          (tabElement as HTMLElement).click();
+          console.log('Tab element clicked');
+        } else {
+          console.log('Tab element not found in the DOM');
+        }
+      } else {
+        console.log('tabsRef.current is null');
+      }
+    };
+
+    window.addEventListener('switch-to-create-bet', handleSwitchTab);
+    
+    return () => {
+      window.removeEventListener('switch-to-create-bet', handleSwitchTab);
+    };
   }, []);
 
   return (
@@ -54,18 +87,25 @@ export default function Home() {
 
         {isConnected ? (
           isCorrectNetwork ? (
-            <Tabs defaultValue="sports">
+            <Tabs ref={tabsRef} value={activeTab} onValueChange={setActiveTab} defaultValue="createBet">
               <TabsList className="mb-4">
-                <TabsTrigger value="sports">Sports Events</TabsTrigger>
+                <TabsTrigger value="createBet">Create Bet</TabsTrigger>
                 <TabsTrigger value="bets">All Bets</TabsTrigger>
+                <TabsTrigger value="sports">Sports Events</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="sports">
-                <SportsEventsList />
+              <TabsContent value="createBet">
+                <div className="max-w-md mx-auto">
+                  <CreateBetForm />
+                </div>
               </TabsContent>
               
               <TabsContent value="bets">
                 <BetsList />
+              </TabsContent>
+              
+              <TabsContent value="sports">
+                <SportsEventsList />
               </TabsContent>
             </Tabs>
           ) : (

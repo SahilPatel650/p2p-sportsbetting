@@ -8,12 +8,10 @@ import { Toaster, toast } from 'sonner';
 export function Navbar() {
   const { account, isConnected, isLoading, connect, disconnect, isCorrectNetwork, switchNetwork } = useWeb3();
 
-  // Format the account address for display
   const formatAccount = (account: string) => {
     return `${account.substring(0, 6)}...${account.substring(account.length - 4)}`;
   };
 
-  // Handle MetaMask connection
   const handleConnect = async () => {
     try {
       await connect();
@@ -23,7 +21,6 @@ export function Navbar() {
     }
   };
 
-  // Handle network switching if on wrong network
   const handleSwitchNetwork = async () => {
     try {
       await switchNetwork();
@@ -37,7 +34,7 @@ export function Navbar() {
   return (
     <nav className="flex items-center justify-between p-4 bg-white border-b">
       <div className="flex items-center space-x-4">
-        <h1 className="text-xl font-bold">P2P Sports Betting</h1>
+        <h1 className="text-xl font-bold">PeerPlay</h1>
       </div>
       <div className="flex items-center space-x-4">
         {isConnected ? (

@@ -1,7 +1,7 @@
 {
-  "name": "p2p-sportsbetting",
+  "name": "peerplay",
   "version": "1.0.0",
-  "description": "P2P Sports Betting Smart Contracts",
+  "description": "PeerPlay: P2P Sports Betting Smart Contracts",
   "main": "index.js",
   "scripts": {
     "deploy": "hardhat run scripts/deploy.js --network sepolia",
@@ -14,8 +14,11 @@
   "dependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@openzeppelin/contracts": "^5.0.0",
+    "axios": "^1.6.2",
     "dotenv": "^16.3.1",
-    "hardhat": "^2.18.1",
-    "axios": "^1.6.2"
+    "hardhat": "^2.18.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0"
   }
 }

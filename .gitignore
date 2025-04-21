@@ -1,17 +1,17 @@
 node_modules
 .env*
 
-# Hardhat files
+# hardhat stuff
 /cache
 /artifacts
 
-# TypeChain files
+# typechain - we can remove later
 /typechain
 /typechain-types
 
-# solidity-coverage files
+# solidity coverage
 /coverage
 /coverage.json
 
-# Hardhat Ignition default folder for deployments against a local node
+# ignition
 ignition/deployments/chain-31337

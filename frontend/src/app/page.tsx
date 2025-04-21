@@ -11,43 +11,27 @@ import { useWeb3 } from '@/context/Web3Context';
 
 export default function Home() {
   const { isConnected, isCorrectNetwork } = useWeb3();
-  const [showSetupCard, setShowSetupCard] = useState(true);
   const [activeTab, setActiveTab] = useState<string>("createBet");
   const tabsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Check if environment variables are set
     const betManagerAddress = process.env.NEXT_PUBLIC_BET_MANAGER_ADDRESS;
     const oracleRegistryAddress = process.env.NEXT_PUBLIC_BET_ORACLE_REGISTRY_ADDRESS;
     
-    // Hide setup card if both addresses are set and not empty
-    if (betManagerAddress && betManagerAddress.length > 0 && 
-        oracleRegistryAddress && oracleRegistryAddress.length > 0) {
-      setShowSetupCard(false);
-    }
 
-    // Make a global function to switch tabs
     (window as any).switchToCreateBetTab = () => {
       setActiveTab("createBet");
     };
   }, []);
 
-  // Listen for custom event to switch tabs
   useEffect(() => {
     const handleSwitchTab = () => {
-      console.log('Custom event received: switch-to-create-bet');
       setActiveTab("createBet");
-      // Find and click the tab to ensure UI is updated
       if (tabsRef.current) {
         const tabElement = tabsRef.current.querySelector('[value="createBet"]');
         if (tabElement) {
           (tabElement as HTMLElement).click();
-          console.log('Tab element clicked');
-        } else {
-          console.log('Tab element not found in the DOM');
         }
-      } else {
-        console.log('tabsRef.current is null');
       }
     };
 
@@ -63,27 +47,6 @@ export default function Home() {
       <Navbar />
       
       <div className="container mx-auto px-4 py-8">
-        {showSetupCard && (
-          <Card className="mb-6 border-yellow-500">
-            <CardHeader>
-              <CardTitle>Setup Required</CardTitle>
-              <CardDescription>
-                Please deploy your contracts to Sepolia first and set the environment variables.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">
-                Add these to your <code>.env.local</code> file:
-              </p>
-              <pre className="p-2 mt-2 bg-gray-100 rounded text-sm">
-                <code>
-                  NEXT_PUBLIC_BET_MANAGER_ADDRESS=your_contract_address_here<br />
-                  NEXT_PUBLIC_BET_ORACLE_REGISTRY_ADDRESS=your_contract_address_here
-                </code>
-              </pre>
-            </CardContent>
-          </Card>
-        )}
 
         {isConnected ? (
           isCorrectNetwork ? (
@@ -110,18 +73,12 @@ export default function Home() {
             </Tabs>
           ) : (
             <Card className="bg-yellow-50">
-              <CardHeader>
-                <CardTitle>Wrong Network</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p>Please switch to Sepolia testnet to use this application.</p>
-              </CardContent>
             </Card>
           )
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>Welcome to P2P Sports Betting</CardTitle>
+              <CardTitle>Welcome to PeerPlay</CardTitle>
             </CardHeader>
             <CardContent>
               <p>Connect your wallet to get started!</p>

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 
-// Define types for the API response
 interface Outcome {
   name: string;
   price: number;
@@ -35,12 +34,10 @@ interface SportsEvent {
   bookmakers: Bookmaker[];
 }
 
-// Create a simple event system to pass selected events
 export const EventBus = {
   selectedEvent: null as SportsEvent | null,
   setSelectedEvent: function(event: SportsEvent | null) {
     this.selectedEvent = event;
-    // Also store in localStorage for better persistence
     if (event) {
       localStorage.setItem('selectedSportsEvent', JSON.stringify(event));
     } else {
@@ -55,62 +52,46 @@ export function SportsEventsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Format date for display
   const formatDate = (dateStr: string): string => {
     const date = new Date(dateStr);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
   };
 
-  // Fetch sports events from API
   const fetchEvents = async () => {
     setLoading(true);
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_SPORTS_API_URL;
-      
-      if (!apiUrl) {
-        throw new Error('Sports API URL not configured');
-      }
+    
+    const apiUrl = process.env.NEXT_PUBLIC_SPORTS_API_URL || "";
+    
 
-      const response = await fetch(apiUrl);
+
+    const response = await fetch(apiUrl);
+    
+    
+    const data: SportsEvent[] = await response.json();
+    
+    const sortedEvents = data.sort((a, b) => 
+      new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime()
+    );
+    
+    const filteredEvents = sortedEvents.filter(event => 
+      event.bookmakers && 
+      event.bookmakers.length > 0 && 
+      event.bookmakers[0].markets && 
+      event.bookmakers[0].markets.length > 0 &&
+      event.bookmakers[0].markets[0].outcomes &&
+      event.bookmakers[0].markets[0].outcomes.length > 0
+    );
+    
+    setEvents(filteredEvents);
       
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-      }
-      
-      const data: SportsEvent[] = await response.json();
-      
-      // Sort events by commence time (soonest first)
-      const sortedEvents = data.sort((a, b) => 
-        new Date(a.commence_time).getTime() - new Date(b.commence_time).getTime()
-      );
-      
-      // Only keep events with valid bookmakers and markets
-      const filteredEvents = sortedEvents.filter(event => 
-        event.bookmakers && 
-        event.bookmakers.length > 0 && 
-        event.bookmakers[0].markets && 
-        event.bookmakers[0].markets.length > 0 &&
-        event.bookmakers[0].markets[0].outcomes &&
-        event.bookmakers[0].markets[0].outcomes.length > 0
-      );
-      
-      setEvents(filteredEvents);
-      
-    } catch (err: any) {
-      console.error('Error fetching sports events:', err);
-      setError(err.message || 'Failed to fetch sports events');
-      toast.error('Failed to load sports events');
-    } finally {
-      setLoading(false);
-    }
+    
+    setLoading(false);
   };
 
-  // Load events on component mount
   useEffect(() => {
     fetchEvents();
   }, []);
 
-  // Group events by sport
   const eventsBySport: Record<string, SportsEvent[]> = {};
   events.forEach(event => {
     if (!eventsBySport[event.sport_title]) {
@@ -191,16 +172,13 @@ export function SportsEventsList() {
                       onClick={() => {
                         console.log("Create a Bet clicked for event:", event);
                         
-                        // Store the selected event in multiple ways
                         EventBus.setSelectedEvent(event);
                         
-                        // Method 1: Direct global function call if available
                         if (typeof (window as any).switchToCreateBetTab === 'function') {
                           console.log("Using global switchToCreateBetTab function");
                           (window as any).switchToCreateBetTab();
                         }
                         
-                        // Method 2: Use tab selectors
                         let tabElement = document.querySelector('[value="createBet"]');
                         
                         if (!tabElement) {
@@ -219,11 +197,9 @@ export function SportsEventsList() {
                           (tabElement as HTMLElement).click();
                         }
                         
-                        // Method 3: Custom event
                         console.log("Dispatching custom event");
                         window.dispatchEvent(new CustomEvent('switch-to-create-bet'));
                         
-                        // Method 4: As a final fallback, try to change URL hash
                         window.location.hash = 'create-bet';
                       }}
                     >

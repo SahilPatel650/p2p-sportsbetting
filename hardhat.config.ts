@@ -4,9 +4,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Get private key from environment variables
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000000";
-const SEPOLIA_URL = process.env.SEPOLIA_URL || "https://sepolia.infura.io/v3/your-api-key";
+const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
+const SEPOLIA_URL = process.env.SEPOLIA_URL || "";
 
 const config: HardhatUserConfig = {
   solidity: {

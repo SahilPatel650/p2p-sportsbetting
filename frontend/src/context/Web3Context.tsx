@@ -5,18 +5,15 @@ import { ethers } from 'ethers';
 import BetManagerABI from '../contracts/BetManager.json';
 import BetOracleRegistryABI from '../contracts/BetOracleRegistry.json';
 
-// Contract addresses - these will be populated after deployment
 const BET_MANAGER_ADDRESS = process.env.NEXT_PUBLIC_BET_MANAGER_ADDRESS || '';
 const BET_ORACLE_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_BET_ORACLE_REGISTRY_ADDRESS || '';
 
-// Debug log
 console.log('Contract Addresses:', {
   BET_MANAGER_ADDRESS,
   BET_ORACLE_REGISTRY_ADDRESS,
   ALL_ENV: process.env
 });
 
-// Sepolia Chain ID
 const SEPOLIA_CHAIN_ID = 11155111;
 
 interface Web3ContextProps {
@@ -55,12 +52,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const [betManager, setBetManager] = useState<ethers.Contract | null>(null);
   const [oracleRegistry, setOracleRegistry] = useState<ethers.Contract | null>(null);
 
-  // Check if user has MetaMask installed
   const checkIfMetaMaskInstalled = () => {
     return typeof window !== 'undefined' && window.ethereum !== undefined;
   };
 
-  // Connect to MetaMask
   const connect = async () => {
     if (!checkIfMetaMaskInstalled()) {
       console.error('MetaMask is not installed!');
@@ -69,11 +64,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
     setIsLoading(true);
     try {
-      // Request account access
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const chainId = await window.ethereum.request({ method: 'eth_chainId' });
       
-      // Setup provider and signer
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       
@@ -83,7 +76,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       setSigner(signer);
       setIsConnected(true);
       
-      // Initialize contracts if addresses are available
       if (BET_MANAGER_ADDRESS && BET_ORACLE_REGISTRY_ADDRESS) {
         const betManagerContract = new ethers.Contract(
           BET_MANAGER_ADDRESS,
@@ -106,7 +98,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Disconnect from MetaMask
   const disconnect = () => {
     setAccount(null);
     setChainId(null);
@@ -117,20 +108,16 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     setIsConnected(false);
   };
 
-  // Check if connected to the correct network (Sepolia)
   const isCorrectNetwork = chainId === SEPOLIA_CHAIN_ID;
 
-  // Switch to Sepolia network
   const switchNetwork = async () => {
     if (!checkIfMetaMaskInstalled()) return;
     
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0xaa36a7' }], // Sepolia's chainId in hex
       });
     } catch (error: any) {
-      // If the chain hasn't been added to MetaMask
       if (error.code === 4902) {
         try {
           await window.ethereum.request({
@@ -144,8 +131,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
                   symbol: 'ETH',
                   decimals: 18,
                 },
-                rpcUrls: ['https://sepolia.infura.io/v3/'],
-                blockExplorerUrls: ['https://sepolia.etherscan.io/'],
               },
             ],
           });
@@ -158,13 +143,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Setup event listeners for MetaMask
   useEffect(() => {
     if (!checkIfMetaMaskInstalled()) return;
 
     const handleAccountsChanged = (accounts: string[]) => {
       if (accounts.length === 0) {
-        // User has disconnected all accounts
         disconnect();
       } else if (accounts[0] !== account) {
         setAccount(accounts[0]);
@@ -173,7 +156,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
     const handleChainChanged = (chainId: string) => {
       setChainId(parseInt(chainId, 16));
-      // Refresh the page on chain change per MetaMask's recommendation
       window.location.reload();
     };
 
@@ -185,13 +167,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       disconnect();
     };
 
-    // Subscribe to MetaMask events
     window.ethereum.on('accountsChanged', handleAccountsChanged);
     window.ethereum.on('chainChanged', handleChainChanged);
     window.ethereum.on('connect', handleConnect);
     window.ethereum.on('disconnect', handleDisconnect);
 
-    // Auto-connect if already authorized
     const checkConnection = async () => {
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
       if (accounts.length > 0) {
@@ -200,7 +180,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     };
     checkConnection();
 
-    // Cleanup event listeners
     return () => {
       window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
       window.ethereum.removeListener('chainChanged', handleChainChanged);
@@ -233,7 +212,6 @@ export function useWeb3() {
   return useContext(Web3Context);
 }
 
-// Add type definitions for window.ethereum
 declare global {
   interface Window {
     ethereum: any;
